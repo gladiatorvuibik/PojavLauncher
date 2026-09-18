@@ -2,6 +2,7 @@ name: Build FluxLauncher
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - v3_openjdk
@@ -10,115 +11,447 @@ permissions:
   contents: read
 
 jobs:
+
   build:
-    name: Build FluxLauncher APK
+
+    name: Build FluxLauncher
+
     runs-on: ubuntu-22.04
 
     steps:
+
+      # =========================================
+      # CHECKOUT
+      # =========================================
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Setup JDK 21
+      # =========================================
+      # JAVA 21
+      # =========================================
+
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
+      # =========================================
+      # LTW
+      # =========================================
+
       - name: Download LTW
         run: |
+
           sudo apt-get update
-          sudo apt-get install -y wget
+
+          sudo apt-get install -y wget python3
+
           mkdir -p app_pojavlauncher/libs
+
           wget \
             https://github.com/PojavLauncherTeam/LTW/releases/latest/download/ltw-release.aar \
             -O app_pojavlauncher/libs/ltw-release.aar
 
-      # ==============================
-      # FLUXLAUNCHER CUSTOMIZATION
-      # ==============================
-      - name: Apply FluxLauncher customization
+      # =========================================
+      # FLUXLAUNCHER MODIFICATION
+      # =========================================
+
+      - name: Apply FluxLauncher modifications
         shell: bash
         run: |
+
           python3 <<'PY'
+
           from pathlib import Path
           import re
 
-          # Application ID
-          gradle = Path("app_pojavlauncher/build.gradle")
+          ROOT = Path("app_pojavlauncher")
+          MAIN = ROOT / "src" / "main"
+          RES = MAIN / "res"
 
-          if gradle.exists():
-              text = gradle.read_text()
+          PURPLE = "#9C27B0"
+          PURPLE_DARK = "#6A1B9A"
+          PURPLE_LIGHT = "#CE93D8"
+          BACKGROUND = "#120A18"
+          SURFACE = "#1E0A29"
+
+          print("")
+          print("========================================")
+          print("       FLUXLAUNCHER MODIFICATION")
+          print("========================================")
+
+          # =========================================
+          # 1. APP NAME
+          # =========================================
+
+          for f in RES.rglob("strings.xml"):
+
+              try:
+                  text = f.read_text(encoding="utf-8")
+              except:
+                  continue
+
+              original = text
 
               text = re.sub(
-                  r'applicationId\s+"[^"]+"',
+                  r'<string\s+name="app_name"[^>]*>.*?</string>',
+                  '<string name="app_name">FluxLauncher</string>',
+                  text,
+                  flags=re.DOTALL
+              )
+
+              text = re.sub(
+                  r'<string\s+name="app_short_name"[^>]*>.*?</string>',
+                  '<string name="app_short_name">FluxLauncher</string>',
+                  text,
+                  flags=re.DOTALL
+              )
+
+              if text != original:
+                  f.write_text(text, encoding="utf-8")
+
+          print("[OK] Application name")
+
+          # =========================================
+          # 2. APPLICATION ID
+          # =========================================
+
+          for gradle in ROOT.rglob("build.gradle"):
+
+              try:
+                  text = gradle.read_text(encoding="utf-8")
+              except:
+                  continue
+
+              original = text
+
+              text = re.sub(
+                  r'applicationId\s+["\'][^"\']+["\']',
                   'applicationId "FluxLauncher.fv"',
                   text,
                   count=1
               )
 
               text = re.sub(
-                  r'^\s*applicationIdSuffix\s+[\'"][^\'"]+[\'"]\s*$',
+                  r'^\s*applicationIdSuffix\s+["\'][^"\']+["\']\s*$',
                   '',
                   text,
                   flags=re.MULTILINE
               )
 
-              gradle.write_text(text)
+              if text != original:
+                  gradle.write_text(text, encoding="utf-8")
 
-          # Название приложения
-          strings = Path(
-              "app_pojavlauncher/src/main/res/values/strings.xml"
+          print("[OK] Application ID = FluxLauncher.fv")
+
+          # =========================================
+          # 3. ALL XML COLORS
+          # =========================================
+
+          green_colors = [
+              "#57CC33",
+              "#55CC33",
+              "#4CAF50",
+              "#00FF00",
+              "#00ff00",
+              "#32CD32",
+              "#33CC33",
+              "#3CFF00",
+              "#39FF14",
+              "#00C853",
+              "#00E676",
+              "#76FF03",
+              "#64DD17"
+          ]
+
+          green_rgb = [
+              "87,204,51",
+              "76,175,80",
+              "0,255,0",
+              "50,205,50"
+          ]
+
+          xml_changed = 0
+
+          for f in RES.rglob("*.xml"):
+
+              try:
+                  text = f.read_text(encoding="utf-8")
+              except:
+                  continue
+
+              original = text
+
+              # HEX green -> purple
+              for green in green_colors:
+                  text = re.sub(
+                      re.escape(green),
+                      PURPLE,
+                      text,
+                      flags=re.IGNORECASE
+                  )
+
+              # RGB green values
+              for rgb in green_rgb:
+                  text = text.replace(
+                      rgb,
+                      "156,39,176"
+                  )
+
+              # Common launcher button names
+              names = [
+                  "minebutton_color",
+                  "play_button_color",
+                  "button_color",
+                  "button_play_color",
+                  "colorPrimary",
+                  "colorPrimaryDark",
+                  "colorAccent"
+              ]
+
+              for name in names:
+
+                  text = re.sub(
+                      rf'(<(?:color|item)[^>]*name=["\']{re.escape(name)}["\'][^>]*>).*?(</(?:color|item)>)',
+                      rf'\1{PURPLE}\2',
+                      text,
+                      flags=re.IGNORECASE | re.DOTALL
+                  )
+
+              # Background
+              if "background_app" in text:
+
+                  text = re.sub(
+                      r'(<color\s+name=["\']background_app["\']\s*>).*?(</color>)',
+                      rf'\1{BACKGROUND}\2',
+                      text,
+                      flags=re.DOTALL
+                  )
+
+              if "background_status_bar" in text:
+
+                  text = re.sub(
+                      r'(<color\s+name=["\']background_status_bar["\']\s*>).*?(</color>)',
+                      rf'\1{PURPLE_DARK}\2',
+                      text,
+                      flags=re.DOTALL
+                  )
+
+              if text != original:
+
+                  f.write_text(
+                      text,
+                      encoding="utf-8"
+                  )
+
+                  xml_changed += 1
+
+          print("[OK] XML colors changed:", xml_changed)
+
+          # =========================================
+          # 4. CREATE FLUX COLORS
+          # =========================================
+
+          values = RES / "values"
+
+          values.mkdir(
+              parents=True,
+              exist_ok=True
           )
 
-          if strings.exists():
-              text = strings.read_text()
-
-              text = re.sub(
-                  r'<string name="app_name">.*?</string>',
-                  '<string name="app_name">FluxLauncher</string>',
-                  text,
-                  count=1
-              )
-
-              strings.write_text(text)
-
-          # ==============================
-          # ФИОЛЕТОВЫЕ ЦВЕТА
-          # ==============================
-
-          values = Path(
-              "app_pojavlauncher/src/main/res/values"
-          )
-
-          values.mkdir(parents=True, exist_ok=True)
-
-          colors = values / "flux_colors.xml"
-
-          colors.write_text("""<?xml version="1.0" encoding="utf-8"?>
+          (values / "flux_colors.xml").write_text(
+          f'''<?xml version="1.0" encoding="utf-8"?>
           <resources>
 
-              <color name="flux_purple">#9C27B0</color>
-              <color name="flux_purple_dark">#6A1B9A</color>
-              <color name="flux_purple_light">#CE93D8</color>
+              <color name="flux_purple">{PURPLE}</color>
+              <color name="flux_purple_dark">{PURPLE_DARK}</color>
+              <color name="flux_purple_light">{PURPLE_LIGHT}</color>
 
-              <color name="flux_background">#120A18</color>
-              <color name="flux_surface">#1E0A29</color>
+              <color name="flux_background">{BACKGROUND}</color>
+              <color name="flux_surface">{SURFACE}</color>
 
               <color name="flux_text">#FFFFFF</color>
               <color name="flux_text_secondary">#D8B8E6</color>
 
           </resources>
-          """)
+          ''',
+          encoding="utf-8"
+          )
 
-          # ==============================
-          # ФИОЛЕТОВАЯ ТЕМА
-          # ==============================
+          print("[OK] Purple color resources")
 
-          theme = values / "flux_theme.xml"
+          # =========================================
+          # 5. REMOVE DISCORD FROM XML
+          # =========================================
 
-          theme.write_text("""<?xml version="1.0" encoding="utf-8"?>
+          discord_count = 0
+
+          for f in RES.rglob("*.xml"):
+
+              try:
+                  text = f.read_text(encoding="utf-8")
+              except:
+                  continue
+
+              original = text
+
+              # Hide views which contain Discord
+              pattern = re.compile(
+                  r'<([A-Za-z0-9_.]+)\b([^>]*(?:discord|Discord|DISCORD)[^>]*)>',
+                  re.IGNORECASE
+              )
+
+              def hide_discord(match):
+
+                  nonlocal discord_count
+
+                  tag = match.group(1)
+                  attrs = match.group(2)
+
+                  if "android:visibility" in attrs:
+
+                      attrs = re.sub(
+                          r'android:visibility\s*=\s*"[^"]*"',
+                          'android:visibility="gone"',
+                          attrs
+                      )
+
+                  else:
+
+                      attrs += ' android:visibility="gone"'
+
+                  discord_count += 1
+
+                  return "<" + tag + attrs + ">"
+
+              text = pattern.sub(
+                  hide_discord,
+                  text
+              )
+
+              if text != original:
+
+                  f.write_text(
+                      text,
+                      encoding="utf-8"
+                  )
+
+          print("[OK] Discord XML elements hidden:", discord_count)
+
+          # =========================================
+          # 6. REMOVE DISCORD STRINGS
+          # =========================================
+
+          discord_strings = 0
+
+          for f in RES.rglob("*.xml"):
+
+              try:
+                  text = f.read_text(encoding="utf-8")
+              except:
+                  continue
+
+              original = text
+
+              # Discord URLs
+              text = re.sub(
+                  r'https?://(?:www\.)?discord(?:\.gg|\.com)[^"<\s]*',
+                  "",
+                  text,
+                  flags=re.IGNORECASE
+              )
+
+              # Discord text
+              text = re.sub(
+                  r'(<string[^>]*(?:discord|Discord|DISCORD)[^>]*>).*?(</string>)',
+                  r'\1\2',
+                  text,
+                  flags=re.IGNORECASE | re.DOTALL
+              )
+
+              if text != original:
+
+                  f.write_text(
+                      text,
+                      encoding="utf-8"
+                  )
+
+                  discord_strings += 1
+
+          print("[OK] Discord resources cleaned:", discord_strings)
+
+          # =========================================
+          # 7. SEARCH JAVA / KOTLIN FOR DISCORD
+          # =========================================
+
+          source_count = 0
+
+          for extension in ["*.java", "*.kt"]:
+
+              for f in MAIN.rglob(extension):
+
+                  try:
+                      text = f.read_text(encoding="utf-8")
+                  except:
+                      continue
+
+                  if re.search(
+                      r'discord',
+                      text,
+                      re.IGNORECASE
+                  ):
+
+                      source_count += 1
+
+                      # Disable obvious Discord URLs
+                      text = re.sub(
+                          r'https?://(?:www\.)?discord(?:\.gg|\.com)[^\s"\']*',
+                          "",
+                          text,
+                          flags=re.IGNORECASE
+                      )
+
+                      f.write_text(
+                          text,
+                          encoding="utf-8"
+                      )
+
+          print("[OK] Discord source files processed:", source_count)
+
+          # =========================================
+          # 8. ANDROID MANIFEST
+          # =========================================
+
+          manifest = MAIN / "AndroidManifest.xml"
+
+          if manifest.exists():
+
+              text = manifest.read_text(
+                  encoding="utf-8"
+              )
+
+              text = text.replace(
+                  'android:theme="@style/AppTheme"',
+                  'android:theme="@style/FluxTheme"'
+              )
+
+              manifest.write_text(
+                  text,
+                  encoding="utf-8"
+              )
+
+          print("[OK] Manifest")
+
+          # =========================================
+          # 9. CREATE FLUX THEME
+          # =========================================
+
+          (values / "flux_theme.xml").write_text(
+          '''<?xml version="1.0" encoding="utf-8"?>
           <resources>
 
               <style name="FluxTheme" parent="AppTheme">
@@ -126,6 +459,8 @@ jobs:
                   <item name="colorPrimary">@color/flux_purple</item>
                   <item name="colorPrimaryDark">@color/flux_purple_dark</item>
                   <item name="colorAccent">@color/flux_purple_light</item>
+
+                  <item name="android:colorAccent">@color/flux_purple_light</item>
 
                   <item name="android:windowBackground">@color/flux_background</item>
 
@@ -138,71 +473,130 @@ jobs:
               </style>
 
           </resources>
-          """)
-
-          # ==============================
-          # ПОДКЛЮЧАЕМ ФИОЛЕТОВУЮ ТЕМУ
-          # ==============================
-
-          manifest = Path(
-              "app_pojavlauncher/src/main/AndroidManifest.xml"
+          ''',
+          encoding="utf-8"
           )
 
-          if manifest.exists():
-              text = manifest.read_text()
+          print("[OK] FluxTheme")
 
-              text = text.replace(
-                  'android:theme="@style/AppTheme"',
-                  'android:theme="@style/FluxTheme"'
-              )
+          # =========================================
+          # 10. FINAL REPORT
+          # =========================================
 
-              manifest.write_text(text)
+          print("")
+          print("========================================")
+          print("       FLUXLAUNCHER READY")
+          print("========================================")
+          print("NAME:       FluxLauncher")
+          print("ID:         FluxLauncher.fv")
+          print("THEME:      PURPLE")
+          print("PLAY:       PURPLE")
+          print("DISCORD:    REMOVED/HIDDEN")
+          print("APK:        FluxLauncher.apk")
+          print("========================================")
 
-          print("FluxLauncher customization applied")
-          print("Purple interface enabled")
           PY
+
+      # =========================================
+      # GRADLE
+      # =========================================
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11"
 
+      # =========================================
+      # LANGUAGE LIST
+      # =========================================
+
       - name: Update language list
         run: |
+
           chmod +x scripts/languagelist_updater.sh
+
           ./scripts/languagelist_updater.sh
+
+      # =========================================
+      # BUILD LWJGL
+      # =========================================
 
       - name: Build LWJGL
         run: |
-          ./gradlew :jre_lwjgl3glfw:build --no-daemon
 
-      - name: Setup JDK 17
+          ./gradlew \
+            :jre_lwjgl3glfw:build \
+            --no-daemon
+
+      # =========================================
+      # JAVA 17
+      # =========================================
+
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Build FluxLauncher
-        run: |
-          ./gradlew :app_pojavlauncher:assembleDebug --no-daemon
+      # =========================================
+      # BUILD APK
+      # =========================================
 
-      - name: Prepare APK
+      - name: Build FluxLauncher APK
         run: |
+
+          ./gradlew \
+            :app_pojavlauncher:assembleDebug \
+            --no-daemon
+
+      # =========================================
+      # FIND APK
+      # =========================================
+
+      - name: Prepare FluxLauncher APK
+        shell: bash
+        run: |
+
           mkdir -p out
 
-          APK=$(find app_pojavlauncher/build/outputs/apk/debug \
-            -type f -name "*.apk" | head -n 1)
+          APK=$(find \
+            app_pojavlauncher/build/outputs/apk/debug \
+            -type f \
+            -name "*.apk" \
+            | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: APK not found!"
+
+            echo "========================================"
+            echo "ERROR: APK NOT FOUND"
+            echo "========================================"
+
+            find app_pojavlauncher/build \
+              -type f \
+              -name "*.apk" \
+              -print
+
             exit 1
           fi
 
-          cp "$APK" out/FluxLauncher.apk
+          echo "APK found:"
+          echo "$APK"
+
+          cp "$APK" \
+            out/FluxLauncher.apk
+
+          echo ""
+          echo "========================================"
+          echo "FINAL APK"
+          echo "========================================"
 
           ls -lh out/FluxLauncher.apk
 
-      - name: Upload FluxLauncher APK
+      # =========================================
+      # UPLOAD
+      # =========================================
+
+      - name: Upload FluxLauncher
         uses: actions/upload-artifact@v4
         with:
           name: FluxLauncher
