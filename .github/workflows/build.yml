@@ -1,1 +1,374 @@
+name: Build FluxLauncher
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - v3_openjdk
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build FluxLauncher APK
+    runs-on: ubuntu-22.04
+
+    steps:
+
+      # ==================================================
+      # DOWNLOAD SOURCE
+      # ==================================================
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ==================================================
+      # JAVA 21
+      # ==================================================
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # ==================================================
+      # LTW
+      # ==================================================
+
+      - name: Download LTW
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+
+          mkdir -p app_pojavlauncher/libs
+
+          wget \
+            https://github.com/PojavLauncherTeam/LTW/releases/latest/download/ltw-release.aar \
+            -O app_pojavlauncher/libs/ltw-release.aar
+
+      # ==================================================
+      # JRE 8
+      # ==================================================
+
+      - name: Download JRE 8
+        uses: dawidd6/action-download-artifact@v9
+        with:
+          workflow: build.yml
+          path: app_pojavlauncher/src/main/assets/components/jre
+          workflow_conclusion: success
+          repo: PojavLauncherTeam/android-openjdk-build-multiarch
+          branch: buildjre8
+          name: jre8-pojav
+
+      # ==================================================
+      # JRE 17
+      # ==================================================
+
+      - name: Download JRE 17
+        uses: dawidd6/action-download-artifact@v9
+        with:
+          workflow: build.yml
+          path: app_pojavlauncher/src/main/assets/components/jre-new
+          workflow_conclusion: success
+          repo: PojavLauncherTeam/android-openjdk-build-multiarch
+          branch: buildjre17-21
+          name: jre17-pojav
+
+      # ==================================================
+      # JRE 21
+      # ==================================================
+
+      - name: Download JRE 21
+        uses: dawidd6/action-download-artifact@v9
+        with:
+          workflow: build.yml
+          path: app_pojavlauncher/src/main/assets/components/jre-21
+          workflow_conclusion: success
+          repo: PojavLauncherTeam/android-openjdk-build-multiarch
+          branch: buildjre17-21
+          name: jre21-pojav
+
+      # ==================================================
+      # CUSTOMIZE FLUXLAUNCHER
+      # ==================================================
+
+      - name: Apply FluxLauncher theme and identity
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          # ----------------------------------------------
+          # BUILD.GRADLE
+          # ----------------------------------------------
+
+          gradle = Path("app_pojavlauncher/build.gradle")
+          text = gradle.read_text()
+
+          # Application ID
+          text = re.sub(
+              r'applicationId\s+"[^"]+"',
+              'applicationId "FluxLauncher.fv"',
+              text,
+              count=1
+          )
+
+          # Debug APK must keep the same package ID
+          text = re.sub(
+              r'^\s*applicationIdSuffix\s+\'.debug\'\s*$',
+              '',
+              text,
+              flags=re.MULTILINE
+          )
+
+          gradle.write_text(text)
+
+          # ----------------------------------------------
+          # STRINGS
+          # ----------------------------------------------
+
+          strings = Path(
+              "app_pojavlauncher/src/main/res/values/strings.xml"
+          )
+
+          text = strings.read_text()
+
+          text = re.sub(
+              r'<string name="app_name">.*?</string>',
+              '<string name="app_name">FluxLauncher</string>',
+              text,
+              count=1
+          )
+
+          text = re.sub(
+              r'<string name="app_short_name">.*?</string>',
+              '<string name="app_short_name">FluxLauncher</string>',
+              text,
+              count=1
+          )
+
+          # Replace remaining visible PojavLauncher branding
+          text = text.replace(
+              "PojavLauncher has unexpectedly crashed",
+              "FluxLauncher has unexpectedly crashed"
+          )
+
+          text = text.replace(
+              "PojavLauncher requires external storage",
+              "FluxLauncher requires external storage"
+          )
+
+          text = text.replace(
+              "Pojav Foreground Service",
+              "FluxLauncher Foreground Service"
+          )
+
+          strings.write_text(text)
+
+          # ----------------------------------------------
+          # COLORS
+          # ----------------------------------------------
+
+          colors = Path(
+              "app_pojavlauncher/src/main/res/values/colors.xml"
+          )
+
+          text = colors.read_text()
+
+          purple_colors = {
+              "control_button_color": "#AA9C27B0",
+              "control_button_pressed_color": "#66000000",
+              "minebutton_color": "#B84DFF",
+              "background_app": "#120A18",
+              "background_overlay": "#3A1748",
+              "background_status_bar": "#240B32",
+              "background_bottom_bar": "#1E0A29",
+              "primary_text": "#FFFFFF",
+              "secondary_text": "#D8B8E6",
+          }
+
+          for name, value in purple_colors.items():
+              pattern = (
+                  r'(<color name="' +
+                  re.escape(name) +
+                  r'">).*?(</color>)'
+              )
+
+              text, count = re.subn(
+                  pattern,
+                  r'\1' + value + r'\2',
+                  text
+              )
+
+              if count == 0:
+                  text = text.replace(
+                      "</resources>",
+                      f'    <color name="{name}">{value}</color>\n'
+                      "</resources>"
+                  )
+
+          colors.write_text(text)
+
+          # ----------------------------------------------
+          # STYLES
+          # ----------------------------------------------
+
+          styles = Path(
+              "app_pojavlauncher/src/main/res/values/styles.xml"
+          )
+
+          text = styles.read_text()
+
+          # Existing status/navigation colors
+          text = re.sub(
+              r'(<item name="android:statusBarColor">).*?(</item>)',
+              r'\1@color/background_status_bar\2',
+              text
+          )
+
+          text = re.sub(
+              r'(<item name="android:navigationBarColor">).*?(</item>)',
+              r'\1@color/background_bottom_bar\2',
+              text
+          )
+
+          # Add FluxLauncher Material/AppCompat colors
+          app_theme_end = re.search(
+              r'(<style name="AppTheme"[\s\S]*?)(\n\s*</style>)',
+              text
+          )
+
+          if app_theme_end:
+              theme_body = app_theme_end.group(1)
+
+              additions = """
+              <item name="colorPrimary">#9C27B0</item>
+              <item name="colorPrimaryDark">#6A1B9A</item>
+              <item name="colorPrimaryVariant">#7B1FA2</item>
+              <item name="colorAccent">#CE93D8</item>
+              <item name="colorControlActivated">#BA68C8</item>
+              <item name="android:colorAccent">#CE93D8</item>
+              <item name="android:windowBackground">@color/background_app</item>
+              <item name="android:statusBarColor">@color/background_status_bar</item>
+              <item name="android:navigationBarColor">@color/background_bottom_bar</item>
+              <item name="android:windowLightStatusBar">false</item>
+              """
+
+              if "name=\"colorPrimary\"" not in theme_body:
+                  theme_body += additions
+
+              text = (
+                  text[:app_theme_end.start(1)]
+                  + theme_body
+                  + text[app_theme_end.end(1):]
+              )
+
+          styles.write_text(text)
+
+          # ----------------------------------------------
+          # MANIFEST
+          # ----------------------------------------------
+
+          manifest = Path(
+              "app_pojavlauncher/src/main/AndroidManifest.xml"
+          )
+
+          text = manifest.read_text()
+
+          # Keep launcher theme explicitly on Flux AppTheme
+          text = text.replace(
+              'android:theme="@style/AppTheme"',
+              'android:theme="@style/AppTheme"'
+          )
+
+          manifest.write_text(text)
+
+          print("========================================")
+          print("FluxLauncher customization complete")
+          print("Name:        FluxLauncher")
+          print("Package ID:  FluxLauncher.fv")
+          print("Theme:       Purple")
+          print("APK:         FluxLauncher.apk")
+          print("========================================")
+          PY
+
+      # ==================================================
+      # GRADLE
+      # ==================================================
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11"
+
+      # ==================================================
+      # BUILD LWJGL
+      # ==================================================
+
+      - name: Build LWJGL
+        run: |
+          chmod +x gradlew
+          chmod +x scripts/languagelist_updater.sh
+          ./scripts/languagelist_updater.sh
+
+          mkdir -p out
+
+          ./gradlew :jre_lwjgl3glfw:build --no-daemon
+
+      # ==================================================
+      # JAVA 17
+      # ==================================================
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ==================================================
+      # BUILD APK
+      # ==================================================
+
+      - name: Build FluxLauncher APK
+        run: |
+          ./gradlew :app_pojavlauncher:assembleDebug --no-daemon
+
+      # ==================================================
+      # RENAME APK
+      # ==================================================
+
+      - name: Prepare FluxLauncher APK
+        run: |
+          mkdir -p out
+
+          APK=$(find \
+            app_pojavlauncher/build/outputs/apk/debug \
+            -type f \
+            -name "*.apk" \
+            | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not found!"
+            exit 1
+          fi
+
+          cp "$APK" out/FluxLauncher.apk
+
+          echo "APK created:"
+          ls -lh out/FluxLauncher.apk
+
+      # ==================================================
+      # UPLOAD APK
+      # ==================================================
+
+      - name: Upload FluxLauncher
+        uses: actions/upload-artifact@v4
+        with:
+          name: FluxLauncher
+          path: out/FluxLauncher.apk
+          if-no-files-found: error
