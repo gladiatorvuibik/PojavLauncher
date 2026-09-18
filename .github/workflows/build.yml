@@ -54,7 +54,7 @@ jobs:
             -O app_pojavlauncher/libs/ltw-release.aar
 
       # ==========================================
-      # FLUXLAUNCHER
+      # FLUXLAUNCHER CUSTOMIZATION
       # ==========================================
 
       - name: Apply FluxLauncher customization
@@ -79,12 +79,14 @@ jobs:
           PURPLE = "#9C27B0"
           PURPLE_DARK = "#6A1B9A"
           PURPLE_LIGHT = "#CE93D8"
+
           BACKGROUND = "#120A18"
+          SURFACE = "#1E0A29"
 
           print("")
-          print("======================================")
-          print("       FLUXLAUNCHER MODIFICATION")
-          print("======================================")
+          print("==========================================")
+          print("       FLUXLAUNCHER CUSTOMIZATION")
+          print("==========================================")
 
           # ==========================================
           # 1. APP NAME
@@ -124,28 +126,40 @@ jobs:
                       encoding="utf-8"
                   )
 
-          print("[OK] App name: FluxLauncher")
+          print("[OK] App name = FluxLauncher")
 
           # ==========================================
           # 2. APPLICATION ID
           # ==========================================
+          #
+          # Android ID:
+          # com.fluxlauncher.fv
+          #
+          # APK:
+          # FluxLauncher.apk
+          #
+          # ==========================================
 
-          gradle_files = [
+          gradle = ROOT / "build.gradle"
+
+          gradle_candidates = [
               ROOT / "build.gradle",
               ROOT / "build.gradle.kts",
               ROOT / "app" / "build.gradle",
               ROOT / "app" / "build.gradle.kts"
           ]
 
-          gradle_files += list(
+          gradle_candidates += list(
               ROOT.glob("*/build.gradle")
           )
 
-          gradle_files += list(
+          gradle_candidates += list(
               ROOT.glob("*/build.gradle.kts")
           )
 
-          for file in gradle_files:
+          changed_gradle = False
+
+          for file in gradle_candidates:
 
               if not file.exists():
                   continue
@@ -180,166 +194,23 @@ jobs:
                       encoding="utf-8"
                   )
 
+                  changed_gradle = True
+
                   print(
-                      "[OK] Application ID:",
+                      "[OK] Application ID changed in:",
                       file
                   )
 
                   break
 
-          # ==========================================
-          # 3. REMOVE DISCORD FROM MAIN MENU
-          # ==========================================
-          #
-          # НЕ используем регулярные выражения
-          # для изменения XML-тегов.
-          #
-          # Удаляем конкретные оригинальные блоки.
-          #
-          # ==========================================
-
-          launcher_xml = (
-              RES
-              / "layout"
-              / "fragment_launcher.xml"
-          )
-
-          if launcher_xml.exists():
-
-              text = launcher_xml.read_text(
-                  encoding="utf-8"
-              )
-
-              original = text
-
-              # --------------------------------------
-              # Discord button
-              # --------------------------------------
-
-              discord_block = """\t\t\t<com.kdt.mcgui.LauncherMenuButton
-\t\t\t\tandroid:id="@+id/discord_button"
-\t\t\t\tstyle="@style/LauncherMenuButton.Universal"
-\t\t\t\tandroid:layout_width="0dp"
-\t\t\t\tandroid:text="@string/mcl_button_discord"
-\t\t\t\tandroid:drawableStart="@drawable/ic_discord"
-\t\t\t\tapp:layout_constraintTop_toTopOf="parent"
-\t\t\t\tapp:layout_constraintStart_toEndOf="@id/social_divider"
-\t\t\t\tapp:layout_constraintEnd_toEndOf="parent"/>
-"""
-
-              if discord_block in text:
-
-                  text = text.replace(
-                      discord_block,
-                      ""
-                  )
-
-                  print(
-                      "[OK] Discord button removed"
-                  )
-
-              else:
-
-                  # Более универсальный вариант
-                  pattern = re.compile(
-                      r'\s*<com\.kdt\.mcgui\.LauncherMenuButton\s+'
-                      r'android:id="@\+id/discord_button"'
-                      r'.*?'
-                      r'/>\s*',
-                      re.DOTALL
-                  )
-
-                  new_text = pattern.sub(
-                      "\n",
-                      text
-                  )
-
-                  if new_text != text:
-
-                      text = new_text
-
-                      print(
-                          "[OK] Discord button removed"
-                      )
-
-              # --------------------------------------
-              # Social divider
-              # --------------------------------------
-
-              divider_block = """\t\t\t<View
-\t\t\t\tandroid:id="@+id/social_divider"
-\t\t\t\tstyle="@style/LauncherFragment_Divider"
-\t\t\t\tandroid:layout_marginVertical="@dimen/padding_large"
-\t\t\t\tapp:layout_constraintTop_toTopOf="parent"
-\t\t\t\tapp:layout_constraintStart_toStartOf="@id/center_guideline"
-\t\t\t\tapp:layout_constraintEnd_toEndOf="@id/center_guideline"
-\t\t\t\tapp:layout_constraintBottom_toBottomOf="@id/news_button"/>
-"""
-
-              if divider_block in text:
-
-                  text = text.replace(
-                      divider_block,
-                      ""
-                  )
-
-                  print(
-                      "[OK] Discord divider removed"
-                  )
-
-              else:
-
-                  pattern = re.compile(
-                      r'\s*<View\s+'
-                      r'android:id="@\+id/social_divider"'
-                      r'.*?'
-                      r'/>\s*',
-                      re.DOTALL
-                  )
-
-                  text = pattern.sub(
-                      "\n",
-                      text
-                  )
-
-              # --------------------------------------
-              # News button becomes full width
-              # --------------------------------------
-
-              text = text.replace(
-                  'android:layout_width="0dp"\n'
-                  '\t\t\t\tandroid:text="@string/mcl_tab_wiki"',
-                  'android:layout_width="match_parent"\n'
-                  '\t\t\t\tandroid:text="@string/mcl_tab_wiki"'
-              )
-
-              text = text.replace(
-                  'app:layout_constraintEnd_toStartOf="@id/social_divider"',
-                  ''
-              )
-
-              text = text.replace(
-                  'app:layout_constraintEnd_toEndOf="parent" />',
-                  'app:layout_constraintEnd_toEndOf="parent" />'
-              )
-
-              launcher_xml.write_text(
-                  text,
-                  encoding="utf-8"
-              )
+          if not changed_gradle:
 
               print(
-                  "[OK] fragment_launcher.xml updated"
-              )
-
-          else:
-
-              print(
-                  "[WARNING] fragment_launcher.xml not found"
+                  "[INFO] Application ID was not changed by script"
               )
 
           # ==========================================
-          # 4. PURPLE COLORS
+          # 3. PURPLE COLOR FILE
           # ==========================================
 
           flux_colors = VALUES / "flux_colors.xml"
@@ -353,16 +224,20 @@ jobs:
               <color name="flux_purple_light">#CE93D8</color>
 
               <color name="flux_background">#120A18</color>
+              <color name="flux_surface">#1E0A29</color>
+
+              <color name="flux_text">#FFFFFF</color>
+              <color name="flux_text_secondary">#D8B8E6</color>
 
           </resources>
           """,
           encoding="utf-8"
           )
 
-          print("[OK] Purple colors created")
+          print("[OK] Purple resources created")
 
           # ==========================================
-          # 5. REPLACE KNOWN GREEN COLORS
+          # 4. CHANGE GREEN COLORS
           # ==========================================
 
           green_colors = [
@@ -390,11 +265,13 @@ jobs:
               "#64dd17"
           ]
 
-          changed = 0
+          changed_colors = 0
+          changed_files = 0
 
           for file in RES.rglob("*.xml"):
 
-              # strings.xml НЕ ТРОГАЕМ
+              # НИКОГДА НЕ ТРОГАЕМ strings.xml
+              # этим блоком.
               if file.name == "strings.xml":
                   continue
 
@@ -409,7 +286,13 @@ jobs:
 
               for green in green_colors:
 
-                  if green.lower() in text.lower():
+                  count = text.lower().count(
+                      green.lower()
+                  )
+
+                  if count:
+
+                      changed_colors += count
 
                       text = re.sub(
                           re.escape(green),
@@ -418,8 +301,6 @@ jobs:
                           flags=re.IGNORECASE
                       )
 
-                      changed += 1
-
               if text != original:
 
                   file.write_text(
@@ -427,20 +308,26 @@ jobs:
                       encoding="utf-8"
                   )
 
+                  changed_files += 1
+
           print(
-              "[OK] Green -> Purple:",
-              changed
+              "[OK] Green colors replaced:",
+              changed_colors
+          )
+
+          print(
+              "[OK] Color files changed:",
+              changed_files
           )
 
           # ==========================================
-          # 6. MAIN COLORS.XML
+          # 5. FORCE PLAY BUTTON COLOR
           # ==========================================
 
-          colors_files = list(
-              RES.rglob("colors.xml")
-          )
+          for file in RES.rglob("*.xml"):
 
-          for file in colors_files:
+              if file.name == "strings.xml":
+                  continue
 
               try:
                   text = file.read_text(
@@ -451,29 +338,27 @@ jobs:
 
               original = text
 
-              # Основной цвет кнопки Play
-              text = re.sub(
-                  r'(<color\s+name="minebutton_color"\s*>).*?(</color>)',
-                  r'\1#9C27B0\2',
-                  text,
-                  flags=re.IGNORECASE | re.DOTALL
-              )
+              button_names = [
+                  "minebutton_color",
+                  "play_button_color",
+                  "button_play_color",
+                  "playbutton_color"
+              ]
 
-              # Фон приложения
-              text = re.sub(
-                  r'(<color\s+name="background_app"\s*>).*?(</color>)',
-                  r'\1#120A18\2',
-                  text,
-                  flags=re.IGNORECASE | re.DOTALL
-              )
+              for name in button_names:
 
-              # Нижняя панель
-              text = re.sub(
-                  r'(<color\s+name="background_bottom_bar"\s*>).*?(</color>)',
-                  r'\1#1E0A29\2',
-                  text,
-                  flags=re.IGNORECASE | re.DOTALL
-              )
+                  pattern = (
+                      r'(<color\s+name=["\']'
+                      + re.escape(name)
+                      + r'["\']\s*>).*?(</color>)'
+                  )
+
+                  text = re.sub(
+                      pattern,
+                      r'\1' + PURPLE + r'\2',
+                      text,
+                      flags=re.IGNORECASE | re.DOTALL
+                  )
 
               if text != original:
 
@@ -482,66 +367,58 @@ jobs:
                       encoding="utf-8"
                   )
 
-                  print(
-                      "[OK] Main colors changed:",
-                      file
+          print("[OK] Play button = PURPLE")
+
+          # ==========================================
+          # 6. MAIN BACKGROUND COLORS
+          # ==========================================
+
+          for file in RES.rglob("*.xml"):
+
+              if file.name == "strings.xml":
+                  continue
+
+              try:
+                  text = file.read_text(
+                      encoding="utf-8"
+                  )
+              except Exception:
+                  continue
+
+              original = text
+
+              backgrounds = [
+                  "background_app",
+                  "background_main",
+                  "background_bottom_bar"
+              ]
+
+              for name in backgrounds:
+
+                  pattern = (
+                      r'(<color\s+name=["\']'
+                      + re.escape(name)
+                      + r'["\']\s*>).*?(</color>)'
                   )
 
-          # ==========================================
-          # 7. PURPLE PLAY BUTTON DRAWABLE
-          # ==========================================
+                  text = re.sub(
+                      pattern,
+                      r'\1' + BACKGROUND + r'\2',
+                      text,
+                      flags=re.IGNORECASE | re.DOTALL
+                  )
 
-          drawable_dir = RES / "drawable"
+              if text != original:
 
-          drawable_dir.mkdir(
-              parents=True,
-              exist_ok=True
-          )
+                  file.write_text(
+                      text,
+                      encoding="utf-8"
+                  )
 
-          play_drawable = (
-              drawable_dir
-              / "mine_button_background.xml"
-          )
-
-          play_drawable.write_text(
-          """<?xml version="1.0" encoding="utf-8"?>
-          <selector xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <item android:state_pressed="true">
-
-                  <shape android:shape="rectangle">
-
-                      <solid android:color="#6A1B9A"/>
-
-                      <corners android:radius="2dp"/>
-
-                  </shape>
-
-              </item>
-
-              <item>
-
-                  <shape android:shape="rectangle">
-
-                      <solid android:color="#9C27B0"/>
-
-                      <corners android:radius="2dp"/>
-
-                  </shape>
-
-              </item>
-
-          </selector>
-          """,
-          encoding="utf-8"
-          )
-
-          print(
-              "[OK] Purple Play button drawable created"
-          )
+          print("[OK] Background = DARK PURPLE")
 
           # ==========================================
-          # 8. THEME
+          # 7. FLUX THEME
           # ==========================================
 
           theme = VALUES / "flux_theme.xml"
@@ -575,8 +452,10 @@ jobs:
           encoding="utf-8"
           )
 
+          print("[OK] FluxTheme created")
+
           # ==========================================
-          # 9. ENABLE THEME
+          # 8. ENABLE FLUX THEME
           # ==========================================
 
           manifest = MAIN / "AndroidManifest.xml"
@@ -587,35 +466,216 @@ jobs:
                   encoding="utf-8"
               )
 
+              original = text
+
               text = text.replace(
                   'android:theme="@style/AppTheme"',
                   'android:theme="@style/FluxTheme"'
               )
 
-              manifest.write_text(
-                  text,
-                  encoding="utf-8"
-              )
+              if text != original:
 
-              print(
-                  "[OK] FluxTheme enabled"
-              )
+                  manifest.write_text(
+                      text,
+                      encoding="utf-8"
+                  )
+
+                  print("[OK] FluxTheme enabled")
+
+              else:
+
+                  print(
+                      "[INFO] AppTheme reference not found"
+                  )
 
           # ==========================================
-          # 10. FINAL
+          # 9. HIDE DISCORD ONLY IN LAYOUTS/MENUS
+          # ==========================================
+          #
+          # ВАЖНО:
+          # strings.xml здесь НЕ изменяется.
+          #
+          # Поэтому больше НЕ будет ошибки:
+          # "android:visibility associated with
+          # an element type string is not bound"
+          #
+          # ==========================================
+
+          discord_hidden = 0
+
+          layout_dirs = []
+
+          for dirname in [
+              "layout",
+              "layout-land",
+              "layout-port",
+              "layout-sw600dp",
+              "layout-sw720dp",
+              "menu"
+          ]:
+
+              directory = RES / dirname
+
+              if directory.exists():
+
+                  layout_dirs.append(
+                      directory
+                  )
+
+          for directory in layout_dirs:
+
+              for file in directory.rglob("*.xml"):
+
+                  try:
+                      text = file.read_text(
+                          encoding="utf-8"
+                      )
+                  except Exception:
+                      continue
+
+                  original = text
+
+                  # --------------------------------------
+                  # Скрываем View, если его android:id
+                  # содержит discord
+                  # --------------------------------------
+
+                  pattern_id = re.compile(
+                      r'<([A-Za-z0-9_.]+)'
+                      r'(\s+[^>]*?'
+                      r'android:id\s*=\s*"[^"]*discord[^"]*"'
+                      r'[^>]*)>',
+                      re.IGNORECASE
+                  )
+
+                  def hide_by_id(match):
+
+                      nonlocal_dummy = None
+
+                      tag = match.group(1)
+
+                      attrs = match.group(2)
+
+                      if "android:visibility" in attrs:
+
+                          attrs = re.sub(
+                              r'android:visibility\s*=\s*"[^"]*"',
+                              'android:visibility="gone"',
+                              attrs
+                          )
+
+                      else:
+
+                          attrs += (
+                              ' android:visibility="gone"'
+                          )
+
+                      return (
+                          "<"
+                          + tag
+                          + attrs
+                          + ">"
+                      )
+
+                  text = pattern_id.sub(
+                      hide_by_id,
+                      text
+                  )
+
+                  # --------------------------------------
+                  # Скрываем View, если строка/ссылка
+                  # содержит Discord
+                  #
+                  # НО ТОЛЬКО ДЛЯ XML LAYOUT/MENU
+                  # --------------------------------------
+
+                  pattern_discord = re.compile(
+                      r'<(?!string\b|resources\b|item\b|style\b)'
+                      r'([A-Za-z0-9_.]+)\b'
+                      r'([^>]*(?:discord|Discord|DISCORD)[^>]*)>',
+                      re.IGNORECASE
+                  )
+
+                  def hide_discord(match):
+
+                      tag = match.group(1)
+
+                      attrs = match.group(2)
+
+                      if "android:visibility" in attrs:
+
+                          attrs = re.sub(
+                              r'android:visibility\s*=\s*"[^"]*"',
+                              'android:visibility="gone"',
+                              attrs
+                          )
+
+                      else:
+
+                          attrs += (
+                              ' android:visibility="gone"'
+                          )
+
+                      return (
+                          "<"
+                          + tag
+                          + attrs
+                          + ">"
+                      )
+
+                  text = pattern_discord.sub(
+                      hide_discord,
+                      text
+                  )
+
+                  if text != original:
+
+                      file.write_text(
+                          text,
+                          encoding="utf-8"
+                      )
+
+                      discord_hidden += 1
+
+                      print(
+                          "[OK] Discord hidden in:",
+                          file
+                      )
+
+          print(
+              "[OK] Discord layout files:",
+              discord_hidden
+          )
+
+          # ==========================================
+          # 10. REMOVE DISCORD URLS ONLY FROM
+          # NON-STRING XML ATTRIBUTES
+          # ==========================================
+
+          # Никаких изменений строк ресурсов.
+          # Это специально сделано, чтобы aapt2
+          # не получил повреждённый strings.xml.
+
+          print(
+              "[OK] strings.xml protected from Discord modification"
+          )
+
+          # ==========================================
+          # 11. FINAL CHECK
           # ==========================================
 
           print("")
-          print("======================================")
-          print("        FLUXLAUNCHER READY")
-          print("======================================")
-          print("Name:       FluxLauncher")
-          print("Package:    com.fluxlauncher.fv")
-          print("Theme:      PURPLE")
-          print("Play:       PURPLE")
-          print("Discord:    REMOVED")
-          print("APK:        FluxLauncher.apk")
-          print("======================================")
+          print("==========================================")
+          print("          FLUXLAUNCHER READY")
+          print("==========================================")
+          print("Name:        FluxLauncher")
+          print("Package:     com.fluxlauncher.fv")
+          print("Theme:       PURPLE")
+          print("Play:        PURPLE")
+          print("Background:  DARK PURPLE")
+          print("Discord:     HIDDEN FROM UI")
+          print("APK:         FluxLauncher.apk")
+          print("==========================================")
           print("")
 
           PY
@@ -635,16 +695,21 @@ jobs:
 
       - name: Update language list
         run: |
+
           chmod +x scripts/languagelist_updater.sh
+
           ./scripts/languagelist_updater.sh
 
       # ==========================================
-      # LWJGL
+      # BUILD LWJGL
       # ==========================================
 
       - name: Build LWJGL
         run: |
-          ./gradlew :jre_lwjgl3glfw:build --no-daemon
+
+          ./gradlew \
+            :jre_lwjgl3glfw:build \
+            --no-daemon
 
       # ==========================================
       # JAVA 17
@@ -662,10 +727,13 @@ jobs:
 
       - name: Build FluxLauncher APK
         run: |
-          ./gradlew :app_pojavlauncher:assembleDebug --no-daemon
+
+          ./gradlew \
+            :app_pojavlauncher:assembleDebug \
+            --no-daemon
 
       # ==========================================
-      # PREPARE APK
+      # FIND APK
       # ==========================================
 
       - name: Prepare FluxLauncher APK
@@ -682,7 +750,10 @@ jobs:
 
           if [ -z "$APK" ]; then
 
+            echo ""
+            echo "=========================================="
             echo "ERROR: APK NOT FOUND"
+            echo "=========================================="
 
             find \
               app_pojavlauncher/build \
@@ -694,14 +765,20 @@ jobs:
 
           fi
 
-          cp "$APK" out/FluxLauncher.apk
+          echo "APK found:"
+          echo "$APK"
+
+          cp \
+            "$APK" \
+            out/FluxLauncher.apk
 
           echo ""
-          echo "======================================"
-          echo "FluxLauncher.apk CREATED"
-          echo "======================================"
+          echo "=========================================="
+          echo "FINAL APK"
+          echo "=========================================="
 
-          ls -lh out/FluxLauncher.apk
+          ls -lh \
+            out/FluxLauncher.apk
 
       # ==========================================
       # UPLOAD
