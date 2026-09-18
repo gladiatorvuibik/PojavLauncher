@@ -76,10 +76,6 @@ jobs:
               exist_ok=True
           )
 
-          # ==========================================
-          # COLORS
-          # ==========================================
-
           PURPLE = "#9C27B0"
           PURPLE_DARK = "#6A1B9A"
           PURPLE_LIGHT = "#CE93D8"
@@ -96,11 +92,7 @@ jobs:
           # 1. APP NAME
           # ==========================================
 
-          strings_files = list(
-              RES.rglob("strings.xml")
-          )
-
-          for file in strings_files:
+          for file in RES.rglob("strings.xml"):
 
               try:
                   text = file.read_text(
@@ -134,25 +126,43 @@ jobs:
                       encoding="utf-8"
                   )
 
-          print("[OK] App name: FluxLauncher")
+          print("[OK] App name = FluxLauncher")
 
           # ==========================================
           # 2. APPLICATION ID
           # ==========================================
           #
-          # Android package ID:
+          # Android ID:
           # com.fluxlauncher.fv
           #
-          # APK name is handled separately below:
+          # APK:
           # FluxLauncher.apk
           #
           # ==========================================
 
-          gradle_files = list(
-              ROOT.rglob("build.gradle")
+          gradle = ROOT / "build.gradle"
+
+          gradle_candidates = [
+              ROOT / "build.gradle",
+              ROOT / "build.gradle.kts",
+              ROOT / "app" / "build.gradle",
+              ROOT / "app" / "build.gradle.kts"
+          ]
+
+          gradle_candidates += list(
+              ROOT.glob("*/build.gradle")
           )
 
-          for file in gradle_files:
+          gradle_candidates += list(
+              ROOT.glob("*/build.gradle.kts")
+          )
+
+          changed_gradle = False
+
+          for file in gradle_candidates:
+
+              if not file.exists():
+                  continue
 
               try:
                   text = file.read_text(
@@ -184,51 +194,86 @@ jobs:
                       encoding="utf-8"
                   )
 
-          print("[OK] Application ID: com.fluxlauncher.fv")
+                  changed_gradle = True
+
+                  print(
+                      "[OK] Application ID changed in:",
+                      file
+                  )
+
+                  break
+
+          if not changed_gradle:
+
+              print(
+                  "[INFO] Application ID was not changed by script"
+              )
 
           # ==========================================
-          # 3. REPLACE GREEN COLORS
+          # 3. PURPLE COLOR FILE
+          # ==========================================
+
+          flux_colors = VALUES / "flux_colors.xml"
+
+          flux_colors.write_text(
+          """<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+
+              <color name="flux_purple">#9C27B0</color>
+              <color name="flux_purple_dark">#6A1B9A</color>
+              <color name="flux_purple_light">#CE93D8</color>
+
+              <color name="flux_background">#120A18</color>
+              <color name="flux_surface">#1E0A29</color>
+
+              <color name="flux_text">#FFFFFF</color>
+              <color name="flux_text_secondary">#D8B8E6</color>
+
+          </resources>
+          """,
+          encoding="utf-8"
+          )
+
+          print("[OK] Purple resources created")
+
+          # ==========================================
+          # 4. CHANGE GREEN COLORS
           # ==========================================
 
           green_colors = [
-
               "#57CC33",
               "#55CC33",
               "#4CAF50",
               "#4caf50",
-
               "#00FF00",
               "#00ff00",
-
               "#32CD32",
               "#32cd32",
-
               "#33CC33",
               "#33cc33",
-
               "#3CFF00",
               "#3cff00",
-
               "#39FF14",
               "#39ff14",
-
               "#00C853",
               "#00c853",
-
               "#00E676",
               "#00e676",
-
               "#76FF03",
               "#76ff03",
-
               "#64DD17",
               "#64dd17"
           ]
 
-          changed_files = 0
           changed_colors = 0
+          changed_files = 0
 
           for file in RES.rglob("*.xml"):
+
+              # НИКОГДА НЕ ТРОГАЕМ strings.xml
+              # этим блоком.
+              if file.name == "strings.xml":
+                  continue
 
               try:
                   text = file.read_text(
@@ -245,7 +290,7 @@ jobs:
                       green.lower()
                   )
 
-                  if count > 0:
+                  if count:
 
                       changed_colors += count
 
@@ -271,32 +316,36 @@ jobs:
           )
 
           print(
-              "[OK] XML files changed:",
+              "[OK] Color files changed:",
               changed_files
           )
 
           # ==========================================
-          # 4. FORCE PLAY BUTTON PURPLE
+          # 5. FORCE PLAY BUTTON COLOR
           # ==========================================
 
-          colors_xml = VALUES / "colors.xml"
+          for file in RES.rglob("*.xml"):
 
-          if colors_xml.exists():
+              if file.name == "strings.xml":
+                  continue
 
-              text = colors_xml.read_text(
-                  encoding="utf-8"
-              )
+              try:
+                  text = file.read_text(
+                      encoding="utf-8"
+                  )
+              except Exception:
+                  continue
 
-              color_names = [
+              original = text
 
+              button_names = [
                   "minebutton_color",
                   "play_button_color",
                   "button_play_color",
-                  "button_color",
                   "playbutton_color"
               ]
 
-              for name in color_names:
+              for name in button_names:
 
                   pattern = (
                       r'(<color\s+name=["\']'
@@ -311,49 +360,23 @@ jobs:
                       flags=re.IGNORECASE | re.DOTALL
                   )
 
-              colors_xml.write_text(
-                  text,
-                  encoding="utf-8"
-              )
+              if text != original:
 
-          print("[OK] Play button forced to purple")
+                  file.write_text(
+                      text,
+                      encoding="utf-8"
+                  )
 
-          # ==========================================
-          # 5. CREATE FLUX COLORS
-          # ==========================================
-
-          flux_colors = VALUES / "flux_colors.xml"
-
-          flux_colors.write_text(
-          """<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-
-              <color name="flux_purple">#9C27B0</color>
-
-              <color name="flux_purple_dark">#6A1B9A</color>
-
-              <color name="flux_purple_light">#CE93D8</color>
-
-              <color name="flux_background">#120A18</color>
-
-              <color name="flux_surface">#1E0A29</color>
-
-              <color name="flux_text">#FFFFFF</color>
-
-              <color name="flux_text_secondary">#D8B8E6</color>
-
-          </resources>
-          """,
-          encoding="utf-8"
-          )
-
-          print("[OK] Flux purple colors created")
+          print("[OK] Play button = PURPLE")
 
           # ==========================================
-          # 6. DARK PURPLE BACKGROUND
+          # 6. MAIN BACKGROUND COLORS
           # ==========================================
 
           for file in RES.rglob("*.xml"):
+
+              if file.name == "strings.xml":
+                  continue
 
               try:
                   text = file.read_text(
@@ -364,16 +387,13 @@ jobs:
 
               original = text
 
-              background_names = [
-
+              backgrounds = [
                   "background_app",
                   "background_main",
-                  "background_bottom_bar",
-                  "background_overlay"
-
+                  "background_bottom_bar"
               ]
 
-              for name in background_names:
+              for name in backgrounds:
 
                   pattern = (
                       r'(<color\s+name=["\']'
@@ -395,10 +415,10 @@ jobs:
                       encoding="utf-8"
                   )
 
-          print("[OK] Dark purple background")
+          print("[OK] Background = DARK PURPLE")
 
           # ==========================================
-          # 7. PURPLE THEME
+          # 7. FLUX THEME
           # ==========================================
 
           theme = VALUES / "flux_theme.xml"
@@ -446,144 +466,65 @@ jobs:
                   encoding="utf-8"
               )
 
+              original = text
+
               text = text.replace(
                   'android:theme="@style/AppTheme"',
                   'android:theme="@style/FluxTheme"'
               )
 
-              manifest.write_text(
-                  text,
-                  encoding="utf-8"
-              )
-
-              print("[OK] FluxTheme enabled")
-
-          else:
-
-              print("[WARNING] AndroidManifest.xml not found")
-
-          # ==========================================
-          # 9. HIDE DISCORD XML ELEMENTS
-          # ==========================================
-
-          discord_count = [0]
-
-          for file in RES.rglob("*.xml"):
-
-              try:
-                  text = file.read_text(
-                      encoding="utf-8"
-                  )
-              except Exception:
-                  continue
-
-              original = text
-
-              pattern = re.compile(
-                  r'<([A-Za-z0-9_.]+)\b([^>]*(?:discord|Discord|DISCORD)[^>]*)>',
-                  re.IGNORECASE
-              )
-
-              def hide_discord(match):
-
-                  tag = match.group(1)
-
-                  attrs = match.group(2)
-
-                  if "android:visibility" in attrs:
-
-                      attrs = re.sub(
-                          r'android:visibility\s*=\s*"[^"]*"',
-                          'android:visibility="gone"',
-                          attrs
-                      )
-
-                  else:
-
-                      attrs += (
-                          ' android:visibility="gone"'
-                      )
-
-                  discord_count[0] += 1
-
-                  return (
-                      "<"
-                      + tag
-                      + attrs
-                      + ">"
-                  )
-
-              text = pattern.sub(
-                  hide_discord,
-                  text
-              )
-
               if text != original:
 
-                  file.write_text(
+                  manifest.write_text(
                       text,
                       encoding="utf-8"
                   )
 
-          print(
-              "[OK] Discord XML elements hidden:",
-              discord_count[0]
-          )
+                  print("[OK] FluxTheme enabled")
 
-          # ==========================================
-          # 10. REMOVE DISCORD URLS FROM XML
-          # ==========================================
+              else:
 
-          discord_urls = [0]
-
-          for file in RES.rglob("*.xml"):
-
-              try:
-                  text = file.read_text(
-                      encoding="utf-8"
-                  )
-              except Exception:
-                  continue
-
-              original = text
-
-              def remove_url(match):
-
-                  discord_urls[0] += 1
-
-                  return ""
-
-              text = re.sub(
-                  r'https?://(?:www\.)?discord(?:\.gg|\.com)[^"<\s]*',
-                  remove_url,
-                  text,
-                  flags=re.IGNORECASE
-              )
-
-              if text != original:
-
-                  file.write_text(
-                      text,
-                      encoding="utf-8"
+                  print(
+                      "[INFO] AppTheme reference not found"
                   )
 
-          print(
-              "[OK] Discord URLs removed:",
-              discord_urls[0]
-          )
-
           # ==========================================
-          # 11. HIDE DISCORD SOURCE UI
+          # 9. HIDE DISCORD ONLY IN LAYOUTS/MENUS
+          # ==========================================
+          #
+          # ВАЖНО:
+          # strings.xml здесь НЕ изменяется.
+          #
+          # Поэтому больше НЕ будет ошибки:
+          # "android:visibility associated with
+          # an element type string is not bound"
+          #
           # ==========================================
 
-          source_files = [0]
+          discord_hidden = 0
 
-          for extension in [
-              "*.java",
-              "*.kt"
+          layout_dirs = []
+
+          for dirname in [
+              "layout",
+              "layout-land",
+              "layout-port",
+              "layout-sw600dp",
+              "layout-sw720dp",
+              "menu"
           ]:
 
-              for file in MAIN.rglob(extension):
+              directory = RES / dirname
+
+              if directory.exists():
+
+                  layout_dirs.append(
+                      directory
+                  )
+
+          for directory in layout_dirs:
+
+              for file in directory.rglob("*.xml"):
 
                   try:
                       text = file.read_text(
@@ -592,34 +533,135 @@ jobs:
                   except Exception:
                       continue
 
-                  if re.search(
-                      r'discord',
-                      text,
+                  original = text
+
+                  # --------------------------------------
+                  # Скрываем View, если его android:id
+                  # содержит discord
+                  # --------------------------------------
+
+                  pattern_id = re.compile(
+                      r'<([A-Za-z0-9_.]+)'
+                      r'(\s+[^>]*?'
+                      r'android:id\s*=\s*"[^"]*discord[^"]*"'
+                      r'[^>]*)>',
                       re.IGNORECASE
-                  ):
+                  )
 
-                      source_files[0] += 1
+                  def hide_by_id(match):
 
-                      # Remove Discord URLs
-                      text = re.sub(
-                          r'https?://(?:www\.)?discord(?:\.gg|\.com)[^\s"\']*',
-                          "",
-                          text,
-                          flags=re.IGNORECASE
+                      nonlocal_dummy = None
+
+                      tag = match.group(1)
+
+                      attrs = match.group(2)
+
+                      if "android:visibility" in attrs:
+
+                          attrs = re.sub(
+                              r'android:visibility\s*=\s*"[^"]*"',
+                              'android:visibility="gone"',
+                              attrs
+                          )
+
+                      else:
+
+                          attrs += (
+                              ' android:visibility="gone"'
+                          )
+
+                      return (
+                          "<"
+                          + tag
+                          + attrs
+                          + ">"
                       )
+
+                  text = pattern_id.sub(
+                      hide_by_id,
+                      text
+                  )
+
+                  # --------------------------------------
+                  # Скрываем View, если строка/ссылка
+                  # содержит Discord
+                  #
+                  # НО ТОЛЬКО ДЛЯ XML LAYOUT/MENU
+                  # --------------------------------------
+
+                  pattern_discord = re.compile(
+                      r'<(?!string\b|resources\b|item\b|style\b)'
+                      r'([A-Za-z0-9_.]+)\b'
+                      r'([^>]*(?:discord|Discord|DISCORD)[^>]*)>',
+                      re.IGNORECASE
+                  )
+
+                  def hide_discord(match):
+
+                      tag = match.group(1)
+
+                      attrs = match.group(2)
+
+                      if "android:visibility" in attrs:
+
+                          attrs = re.sub(
+                              r'android:visibility\s*=\s*"[^"]*"',
+                              'android:visibility="gone"',
+                              attrs
+                          )
+
+                      else:
+
+                          attrs += (
+                              ' android:visibility="gone"'
+                          )
+
+                      return (
+                          "<"
+                          + tag
+                          + attrs
+                          + ">"
+                      )
+
+                  text = pattern_discord.sub(
+                      hide_discord,
+                      text
+                  )
+
+                  if text != original:
 
                       file.write_text(
                           text,
                           encoding="utf-8"
                       )
 
+                      discord_hidden += 1
+
+                      print(
+                          "[OK] Discord hidden in:",
+                          file
+                      )
+
           print(
-              "[OK] Discord source files processed:",
-              source_files[0]
+              "[OK] Discord layout files:",
+              discord_hidden
           )
 
           # ==========================================
-          # 12. FINAL REPORT
+          # 10. REMOVE DISCORD URLS ONLY FROM
+          # NON-STRING XML ATTRIBUTES
+          # ==========================================
+
+          # Никаких изменений строк ресурсов.
+          # Это специально сделано, чтобы aapt2
+          # не получил повреждённый strings.xml.
+
+          print(
+              "[OK] strings.xml protected from Discord modification"
+          )
+
+          # ==========================================
+          # 11. FINAL CHECK
           # ==========================================
 
           print("")
@@ -629,9 +671,9 @@ jobs:
           print("Name:        FluxLauncher")
           print("Package:     com.fluxlauncher.fv")
           print("Theme:       PURPLE")
-          print("Play button: PURPLE")
+          print("Play:        PURPLE")
           print("Background:  DARK PURPLE")
-          print("Discord:     HIDDEN")
+          print("Discord:     HIDDEN FROM UI")
           print("APK:         FluxLauncher.apk")
           print("==========================================")
           print("")
@@ -680,7 +722,7 @@ jobs:
           java-version: '17'
 
       # ==========================================
-      # BUILD FLUXLAUNCHER
+      # BUILD APK
       # ==========================================
 
       - name: Build FluxLauncher APK
@@ -723,8 +765,7 @@ jobs:
 
           fi
 
-          echo ""
-          echo "APK FOUND:"
+          echo "APK found:"
           echo "$APK"
 
           cp \
@@ -740,10 +781,10 @@ jobs:
             out/FluxLauncher.apk
 
       # ==========================================
-      # UPLOAD APK
+      # UPLOAD
       # ==========================================
 
-      - name: Upload FluxLauncher APK
+      - name: Upload FluxLauncher
         uses: actions/upload-artifact@v4
         with:
           name: FluxLauncher
